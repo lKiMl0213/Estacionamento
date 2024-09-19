@@ -1,0 +1,131 @@
+# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+
+import numpy as np
+import datetime as dt
+import pandas as pd
+import sys
+import openpyxl
+import os
+import xlsxwriter
+
+def get_current_date_time():
+    current_date_time = dt.datetime.now()
+    return current_date_time
+
+def get_info_from_user():
+    plate_number = input("Coloque a placa do veículo: ").upper()
+    type_vehicle = input("Coloque o tipo do veículo: A para carro, B para moto, C para outros tipos de veículos: ").upper()
+    vehicle_types = {"A": "carro", "B": "moto", "C": "outro"}
+    type_vehicle_full = vehicle_types.get(type_vehicle)
+    
+    entry_time = get_current_date_time()
+    entry_time_str = entry_time.strftime("%d/%m/%Y %H:%M:%S")
+    print(f"O veículo de placa \033[1m {plate_number} \033[0m de tipo \033[1m {type_vehicle_full} \033[0m entrou no estacionamento às \033[1m{entry_time_str} \033[0m. Caro cliente, guarde seu comprovante de entrada. Até 15 minutos de graça.")
+    return plate_number, type_vehicle, entry_time
+
+def value_per_type(type_vehicle):
+    if type_vehicle == "A":
+        return 0.10
+    elif type_vehicle == "B":
+        return 0.05
+    elif type_vehicle == "C":
+        return 0.20
+
+def calculate_value_to_pay(total_time_parked, type_vehicle, entry_time, exit_time):
+    total_time_parked_minutes = total_time_parked.total_seconds() / 60
+    if total_time_parked_minutes <= 15:
+        value_to_pay = 0
+    else:
+        value_to_pay = total_time_parked_minutes * value_per_type(type_vehicle)
+    return value_to_pay
+
+def calculate_total_time_parked(entry_time, exit_time):
+    total_time_parked = (exit_time - entry_time)
+    return total_time_parked
+
+def vehicles_still_parked(parked):
+    if parked:
+        for i in parked:
+            print(i)
+    else:
+        print("Não há veículos estacionados no momento.")
+
+def exit_info(entry_time, type_vehicle, parked):
+    plate_number = input("Coloque a placa do veículo: ").upper()
+    exit_time = get_current_date_time()
+    total_time_parked = calculate_total_time_parked(entry_time, exit_time)
+    value_to_pay = calculate_value_to_pay(total_time_parked, type_vehicle, entry_time, exit_time)
+    parked.remove((plate_number, type_vehicle, entry_time))
+    exit_time_str = exit_time.strftime("%d/%m/%Y %H:%M:%S")
+    print(f"O veículo de placa \033[1m {plate_number} \033[0m de tipo \033[1m {type_vehicle} \033[0m saiu do estacionamento às \033[1m{exit_time_str} \033[0m. Totalizando \033[1m{total_time_parked} \033[0mminutos de permanência. Valor a ser pago: \033[1mR$ {value_to_pay} \033[0m")
+    return plate_number, type_vehicle, entry_time, exit_time, total_time_parked, value_to_pay
+
+def historic_info(plate_number, type_vehicle, entry_time, exit_time, total_time_parked, value_to_pay):
+    historic_info = pd.DataFrame({
+        "Placa": [plate_number],
+        "Tipo de Veículo": [type_vehicle],
+        "Horário de Entrada": [entry_time],
+        "Horário de Saída": [exit_time],
+        "Tempo de permanência": [total_time_parked],
+        "Valor a ser pago": [value_to_pay]
+    })
+    return historic_info
+
+def save_historic_info(historic_info):
+    file_path = 'historic_info.xlsx'
+    
+    if os.path.exists(file_path):
+        workbook = openpyxl.load_workbook(file_path)
+        sheet = workbook.active
+    else:
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        for i, col in enumerate(historic_info.columns, start=1):
+            sheet.cell(row=1, column=i, value=col)
+    next_row = sheet.max_row + 1
+    for i, row in historic_info.iterrows():
+        for j, value in enumerate(row, start=1):
+            sheet.cell(row=next_row, column=j, value=value)
+        next_row += 1
+    workbook.save(file_path)
+
+def show_vehicles_from_day(parked):
+    today = dt.datetime.now().date()
+    vehicles_from_day = [vehicle for vehicle in parked if vehicle[2].date() == today]
+    if vehicles_from_day:
+        print("Veículos do dia:")
+        for vehicle in vehicles_from_day:
+            print(vehicle)
+    else:
+        print("Não houveram veículos neste dia.")
+
+def main(parked):
+    while True:
+        menu = [
+            "1 - Entrada de veículo",
+            "2 - Saída de veículo",
+            "3 - Veículos do dia",
+            "4 - Veículos estacionados",
+            "5 - Sair"
+        ]
+        for item in menu:
+            print(item)
+        option = input("Escolha uma opção: ")
+        if option == "1":
+            plate_number, type_vehicle, entry_time = get_info_from_user()
+            parked.append((plate_number, type_vehicle, entry_time))
+        elif option == "2":
+            plate_number, type_vehicle, entry_time, exit_time, total_time_parked, value_to_pay = exit_info(entry_time, type_vehicle, parked)
+            historic_info_df = historic_info(plate_number, type_vehicle, entry_time, exit_time, total_time_parked, value_to_pay)
+            save_historic_info(historic_info_df)
+        elif option == "3":
+            show_vehicles_from_day(parked)
+        elif option == "4":
+            vehicles_still_parked(parked)
+        elif option == "5":
+            sys.exit()
+
+if __name__ == "__main__":
+    parked = []
+    main(parked)
